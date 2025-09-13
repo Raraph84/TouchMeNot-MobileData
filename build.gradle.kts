@@ -1,4 +1,4 @@
 // Top-level Gradle file
 plugins {
-    id("com.android.application") version "8.12.2" apply false
+    id("com.android.application") version "8.12.3" apply false
 }
