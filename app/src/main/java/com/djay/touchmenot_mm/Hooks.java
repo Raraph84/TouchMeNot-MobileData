@@ -179,18 +179,56 @@ public class Hooks implements IXposedHookLoadPackage {
         return null;
     }
 
+    /**
+     * Dispatch user feedback: toast + robust reject-style double-tap vibration.
+     * Uses two scheduled one-shot vibrations for maximum compatibility.
+     */
     private void dispatchFeedback(Context ctx, String message) {
         if (ctx == null) return;
 
         new Handler(Looper.getMainLooper()).post(() -> {
             try {
-                Toast.makeText(ctx, message, Toast.LENGTH_SHORT).show();
-                Vibrator vib = (Vibrator) ctx.getSystemService(Context.VIBRATOR_SERVICE);
-                if (vib != null) {
+                // Unified toast message (use passed message if non-empty)
+                String toastText = (message != null && !message.isEmpty()) ? message : "Action blocked — unlock to access";
+                Toast.makeText(ctx, toastText, Toast.LENGTH_SHORT).show();
+
+                final Vibrator vib = (Vibrator) ctx.getSystemService(Context.VIBRATOR_SERVICE);
+                if (vib == null) {
+                    XposedBridge.log(TAG + ": dispatchFeedback - vibrator service null");
+                    return;
+                }
+
+                try {
+                    // Robust double-tap: two short vibrates separated by a short gap.
+                    // Timings (ms): first pulse 45ms, gap ~120ms, second pulse 45ms.
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        vib.vibrate(VibrationEffect.createOneShot(70, VibrationEffect.DEFAULT_AMPLITUDE));
+                        VibrationEffect first = VibrationEffect.createOneShot(45, VibrationEffect.DEFAULT_AMPLITUDE);
+                        VibrationEffect second = VibrationEffect.createOneShot(45, VibrationEffect.DEFAULT_AMPLITUDE);
+
+                        vib.vibrate(first); // first pulse
+                        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                            try {
+                                vib.vibrate(second); // second pulse
+                                XposedBridge.log(TAG + ": dispatchFeedback - double-tap vib executed");
+                            } catch (Throwable ignored) {}
+                        }, 120); // delay between pulses (ms)
                     } else {
-                        vib.vibrate(70);
+                        // Pre-O: fallback to pattern
+                        long[] pattern = new long[]{0, 45, 120, 45};
+                        vib.vibrate(pattern, -1);
+                        XposedBridge.log(TAG + ": dispatchFeedback - pattern vib executed (pre-O)");
+                    }
+                } catch (Throwable vibErr) {
+                    // Final fallback: single short vibration
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            vib.vibrate(VibrationEffect.createOneShot(60, VibrationEffect.DEFAULT_AMPLITUDE));
+                        } else {
+                            vib.vibrate(60);
+                        }
+                        XposedBridge.log(TAG + ": dispatchFeedback - fallback single vib executed");
+                    } catch (Throwable ignored) {
+                        XposedBridge.log(TAG + ": dispatchFeedback - all vib attempts failed: " + ignored);
                     }
                 }
             } catch (Throwable t) {
