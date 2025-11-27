@@ -1,13 +1,11 @@
 package com.djay.touchmenot_mm;
 
-import android.os.Build;
+import android.util.Log;
+import android.view.View;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.PrintWriter;
+import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Locale;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -17,77 +15,132 @@ import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 public class RecorderHook implements IXposedHookLoadPackage {
-
-    private static final String OUTPUT_PATH = "/sdcard/Download/final_Qslog.txt";
-    private static final int MAX_CALLS_PER_METHOD = 200;
-
-    private final HashMap<String, Integer> methodCallCounts = new HashMap<>();
-
-    // These are the known QS tile classes that have handleClick() and represent the core toggles
-    private static final String[] QS_TILE_CLASSES = new String[] {
-            "com.android.systemui.qs.tiles.AirplaneModeTile",
-            "com.android.systemui.qs.tiles.BluetoothTile",
-            "com.android.systemui.qs.tiles.FlashlightTile",
-            "com.android.systemui.qs.tiles.MobileDataTile",
-            "com.android.systemui.qs.tiles.WifiTile",
-            "com.android.systemui.qs.tiles.HotspotTile",
-            "com.android.systemui.qs.tiles.PowerMenuTile"
-    };
+    private static final String SYSTEMUI = "com.android.systemui";
+    private static final String TAG = "RecorderHook";
 
     @Override
-    public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lpparam) {
-        if (!"com.android.systemui".equals(lpparam.packageName)) return;
+    public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
+        if (!SYSTEMUI.equals(lpparam.packageName)) return;
 
+        log("=== RecorderHook loaded into SystemUI ===");
+
+        // HOOK 1: QSTileImpl#click (Generic QS tile click)
         try {
-            PrintWriter writer = new PrintWriter(new FileWriter(OUTPUT_PATH, false));
-            writer.println("========== QS Tile Log Started (" + getTimestamp() + ") ==========");
-            writer.close();
-        } catch (Throwable e) {
-            XposedBridge.log("RecorderHook: Failed to create log file: " + e.getMessage());
-        }
+            Class<?> qst = XposedHelpers.findClass("com.android.systemui.qs.tileimpl.QSTileImpl", lpparam.classLoader);
+            for (Method m : qst.getDeclaredMethods()) {
+                if (!m.getName().equals("click")) continue;
 
-        for (String className : QS_TILE_CLASSES) {
-            try {
-                Class<?> clazz = XposedHelpers.findClass(className, lpparam.classLoader);
-                hookAllDeclaredMethods(clazz);
-                XposedBridge.log("RecorderHook: Hooked methods from " + className);
-            } catch (Throwable t) {
-                XposedBridge.log("RecorderHook: Failed to hook " + className + ": " + t.getMessage());
-            }
-        }
-    }
-
-    private void hookAllDeclaredMethods(Class<?> clazz) {
-        for (final java.lang.reflect.Method method : clazz.getDeclaredMethods()) {
-            try {
-                XposedBridge.hookMethod(method, new XC_MethodHook() {
+                XposedBridge.hookMethod(m, new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) {
-                        String key = clazz.getName() + "#" + method.getName();
-                        int count = methodCallCounts.getOrDefault(key, 0);
-                        if (count >= MAX_CALLS_PER_METHOD) return;
-
-                        methodCallCounts.put(key, count + 1);
-
-                        StringBuilder logEntry = new StringBuilder();
-                        logEntry.append("[").append(getTimestamp()).append("] ")
-                                .append(clazz.getSimpleName()).append(" -> ")
-                                .append(method.getName()).append("()");
-
-                        try (FileWriter fw = new FileWriter(OUTPUT_PATH, true);
-                             PrintWriter pw = new PrintWriter(fw)) {
-                            pw.println(logEntry);
-                        } catch (Throwable e) {
-                            XposedBridge.log("RecorderHook: Failed to write to log: " + e.getMessage());
-                        }
+                        logEntry(param.thisObject, "click", "QSTileImpl clicked");
+                        log("STACK: " + shortStack());
                     }
                 });
-            } catch (Throwable ignored) {
+                log("Hooked QSTileImpl#click");
+                break;
             }
+        } catch (Throwable t) {
+            log("Failed to hook QSTileImpl#click: " + t.getMessage());
+        }
+
+        // HOOK 2: InternetTile (all declared methods)
+        hookAllMethods("com.android.systemui.qs.tiles.InternetTile", lpparam);
+
+        // HOOK 3: InternetDialogControllerImpl (all declared methods)
+        hookAllMethods("com.android.systemui.qs.tiles.dialog.InternetDialogControllerImpl", lpparam);
+
+        // HOOK 4: Footer power button classes
+        hookAllMethods("com.android.systemui.statusbar.phone.StatusBarFooterView", lpparam);
+        hookAllMethods("com.android.systemui.qs.QSFooterImpl", lpparam);
+        hookAllMethods("com.android.systemui.qs.footer.domain.interactor.QSFooterInteractorImpl", lpparam);
+
+        // HOOK 5: Global View.performClick (captures footer button!)
+        try {
+            Class<?> v = View.class;
+            for (Method m : v.getDeclaredMethods()) {
+                if (!m.getName().equals("performClick")) continue;
+                if (m.getParameterTypes().length != 0) continue;
+
+                XposedBridge.hookMethod(m, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        logEntry(param.thisObject, "performClick", "View.performClick()");
+                        try {
+                            Object parent = XposedHelpers.callMethod(param.thisObject, "getParent");
+                            if (parent != null)
+                                log("PARENT=" + parent.getClass().getName());
+                        } catch (Throwable ignored) {}
+
+                        log("STACK: " + shortStack());
+                    }
+                });
+                log("Hooked View.performClick");
+                break;
+            }
+        } catch (Throwable t) {
+            log("Failed to hook View.performClick: " + t.getMessage());
         }
     }
 
-    private String getTimestamp() {
-        return new SimpleDateFormat("HH:mm:ss", Locale.US).format(new Date());
+    // ————————————————————————————————————————————————————————————————
+    // Helper: hook all declared methods of a class
+    // ————————————————————————————————————————————————————————————————
+    private void hookAllMethods(String className, XC_LoadPackage.LoadPackageParam lpparam) {
+        try {
+            Class<?> clazz = XposedHelpers.findClass(className, lpparam.classLoader);
+            Method[] methods = clazz.getDeclaredMethods();
+
+            for (Method m : methods) {
+                Method target = m;
+
+                XposedBridge.hookMethod(target, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        logEntry(param.thisObject, target.getName(), "Method in " + className);
+                        log("STACK: " + shortStack());
+                    }
+                });
+            }
+
+            log("Hooked ALL methods of " + className);
+
+        } catch (Throwable t) {
+            log("Class NOT found or failed: " + className + " → " + t.getMessage());
+        }
+    }
+
+    // ————————————————————————————————————————————————————————————————
+    // Logging utilities
+    // ————————————————————————————————————————————————————————————————
+    private void log(String msg) {
+        Log.i(TAG, msg);
+        XposedBridge.log("[" + TAG + "] " + msg);
+    }
+
+    private void logEntry(Object instance, String method, String note) {
+        String cls = (instance != null) ? instance.getClass().getName() : "null";
+        String ts = new SimpleDateFormat("HH:mm:ss", Locale.US).format(new Date());
+        String out = "[" + ts + "] " + cls + "#" + method + " — " + note;
+        log(out);
+    }
+
+    private String shortStack() {
+        try {
+            StackTraceElement[] st = Thread.currentThread().getStackTrace();
+            StringBuilder sb = new StringBuilder();
+
+            for (int i = 4; i < Math.min(st.length, 12); i++) {
+                sb.append(st[i].getClassName())
+                        .append(".")
+                        .append(st[i].getMethodName())
+                        .append("():")
+                        .append(st[i].getLineNumber());
+                if (i < 11) sb.append(" <- ");
+            }
+            return sb.toString();
+        } catch (Throwable t) {
+            return "stack unavailable";
+        }
     }
 }
