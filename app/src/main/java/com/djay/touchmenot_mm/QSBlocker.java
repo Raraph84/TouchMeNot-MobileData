@@ -2,6 +2,10 @@ package com.djay.touchmenot_mm;
 
 import android.app.KeyguardManager;
 import android.content.Context;
+import android.os.Build;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.widget.Toast;
 import android.view.View;
 
 import java.lang.reflect.Method;
@@ -13,18 +17,28 @@ import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 public class QSBlocker implements IXposedHookLoadPackage {
+
     private static final String SYSTEMUI = "com.android.systemui";
 
     @Override
     public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
-
         if (!SYSTEMUI.equals(lpparam.packageName)) return;
 
-        XposedBridge.log("QSBlocker: Loaded into SystemUI");
+        XposedBridge.log("QSBlocker: Loaded into SystemUI with feedback");
 
-        /* ---------------------------------------------------------------
-         * 1) BLOCK BASE TILE CLICKS (INTERNET TILE TARGETED)
-         * --------------------------------------------------------------- */
+        hookQSTileImplClick(lpparam);
+        hookInternetDialog(lpparam);
+        hookFooterPowerButton(lpparam);
+
+        // Keep existing working tile hooks
+        hookSimpleTile(lpparam, "com.android.systemui.qs.tiles.AirplaneModeTile", "handleClick");
+        hookSimpleTile(lpparam, "com.android.systemui.qs.tiles.BluetoothTile", "handleClickWithSatelliteCheck");
+    }
+
+    // ----------------------------------------------------------------------
+    // 1. BLOCK QSTileImpl#click for InternetTile
+    // ----------------------------------------------------------------------
+    private void hookQSTileImplClick(XC_LoadPackage.LoadPackageParam lpparam) {
         try {
             Class<?> qstileImpl = XposedHelpers.findClass(
                     "com.android.systemui.qs.tileimpl.QSTileImpl",
@@ -32,182 +46,175 @@ public class QSBlocker implements IXposedHookLoadPackage {
             );
 
             for (Method m : qstileImpl.getDeclaredMethods()) {
-                if (!m.getName().equals("click")) continue;
+                if (!m.getName().equals("click"))
+                    continue;
 
                 XposedBridge.hookMethod(m, new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        try {
-                            Object tileObj = param.thisObject;
-                            String tileClass = tileObj.getClass().getName();
-                            Context ctx = getContextFromAny(tileObj);
+                        Object thisObj = param.thisObject;
+                        if (thisObj == null) return;
 
-                            if (ctx != null && isKeyguardLocked(ctx)) {
-                                // Block Internet tile only
-                                if (tileClass.contains("InternetTile")) {
-                                    XposedBridge.log("QSBlocker: Blocked InternetTile click");
-                                    param.setResult(null);
-                                }
-                            }
-                        } catch (Throwable t) {
-                            XposedBridge.log("QSBlocker: Error in QSTileImpl#click hook: " + t.getMessage());
+                        Context ctx = getContextFromAny(thisObj);
+                        if (ctx == null) return;
+
+                        if (!isKeyguardLocked(ctx)) return;
+
+                        String instName = thisObj.getClass().getName();
+                        if (instName.contains("InternetTile")) {
+                            XposedBridge.log("QSBlocker: Blocked InternetTile via QSTileImpl#click");
+                            rejectFeedback(ctx);
+                            param.setResult(null);
                         }
                     }
                 });
 
                 XposedBridge.log("QSBlocker: Hooked QSTileImpl#click");
-                break;
+                return;
             }
 
         } catch (Throwable t) {
-            XposedBridge.log("QSBlocker: FAILED to hook QSTileImpl#click: " + t.getMessage());
+            XposedBridge.log("QSBlocker: Failed hook on QSTileImpl#click: " + t.getMessage());
         }
+    }
 
-
-        /* ---------------------------------------------------------------
-         * 2) BLOCK INTERNET DIALOG OPEN (SECONDARY SAFETY NET)
-         * --------------------------------------------------------------- */
+    // ----------------------------------------------------------------------
+    // 2. BLOCK InternetDialogControllerImpl (wifi/data dialog)
+    // ----------------------------------------------------------------------
+    private void hookInternetDialog(XC_LoadPackage.LoadPackageParam lpparam) {
         try {
-            Class<?> dialogCtrl = XposedHelpers.findClass(
+            Class<?> clazz = XposedHelpers.findClass(
                     "com.android.systemui.qs.tiles.dialog.InternetDialogControllerImpl",
                     lpparam.classLoader
             );
 
-            Method target = null;
-            for (Method m : dialogCtrl.getDeclaredMethods()) {
-                if (m.getName().equals("onUserClickedInternetDialog")) {
-                    target = m;
-                    break;
-                }
-            }
+            for (Method m : clazz.getDeclaredMethods()) {
+                if (!m.getName().equals("onUserClickedInternetDialog"))
+                    continue;
 
-            if (target != null) {
+                Method target = m;
                 XposedBridge.hookMethod(target, new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+
                         Context ctx = getContextFromAny(param.thisObject);
                         if (ctx != null && isKeyguardLocked(ctx)) {
                             XposedBridge.log("QSBlocker: Blocked InternetDialogControllerImpl#onUserClickedInternetDialog");
+                            rejectFeedback(ctx);
                             param.setResult(null);
                         }
                     }
                 });
 
                 XposedBridge.log("QSBlocker: Hooked InternetDialogControllerImpl#onUserClickedInternetDialog");
-            } else {
-                XposedBridge.log("QSBlocker: onUserClickedInternetDialog not found");
+                return;
             }
 
         } catch (Throwable t) {
-            XposedBridge.log("QSBlocker: FAILED to hook InternetDialogControllerImpl: " + t.getMessage());
+            XposedBridge.log("QSBlocker: Failed hook on InternetDialogControllerImpl: " + t.getMessage());
         }
+    }
 
-
-        /* ---------------------------------------------------------------
-         * 3) BLOCK FOOTER POWER MENU BUTTON
-         *    — Confirmed classname from your foothunt logs:
-         *      com.android.systemui.globalactions.GlobalActionsDialogLite
-         * --------------------------------------------------------------- */
+    // ----------------------------------------------------------------------
+    // 3. BLOCK Footer power menu (GlobalActionsDialogLite#showOrHideDialog)
+    // ----------------------------------------------------------------------
+    private void hookFooterPowerButton(XC_LoadPackage.LoadPackageParam lpparam) {
         try {
-            Class<?> globalActionsLite = XposedHelpers.findClass(
+            Class<?> clazz = XposedHelpers.findClass(
                     "com.android.systemui.globalactions.GlobalActionsDialogLite",
                     lpparam.classLoader
             );
 
-            // Methods we will block
-            String[] methodNames = new String[]{
-                    "showOrHideDialog",
-                    "showDialog"
-            };
+            for (Method m : clazz.getDeclaredMethods()) {
+                if (!m.getName().equals("showOrHideDialog"))
+                    continue;
 
-            for (String mname : methodNames) {
-                try {
-                    Method mm = null;
-                    for (Method m : globalActionsLite.getDeclaredMethods()) {
-                        if (m.getName().equals(mname)) {
-                            mm = m;
-                            break;
-                        }
-                    }
+                Method target = m;
 
-                    if (mm != null) {
-                        XposedBridge.hookMethod(mm, new XC_MethodHook() {
-                            @Override
-                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                                Context ctx = getContextFromAny(param.thisObject);
-                                if (ctx != null && isKeyguardLocked(ctx)) {
-                                    XposedBridge.log("QSBlocker: BLOCKED GlobalActionsDialogLite#" + mname + " (Footer Power Menu)");
-                                    param.setResult(null); // stop dialog from opening
-                                }
-                            }
-                        });
-
-                        XposedBridge.log("QSBlocker: Hooked GlobalActionsDialogLite#" + mname);
-                    } else {
-                        XposedBridge.log("QSBlocker: Method not found: " + mname);
-                    }
-
-                } catch (Throwable inner) {
-                    XposedBridge.log("QSBlocker: failed hooking power menu method " + mname + " : " + inner.getMessage());
-                }
-            }
-
-        } catch (Throwable t) {
-            XposedBridge.log("QSBlocker: GlobalActionsDialogLite class NOT FOUND: " + t.getMessage());
-        }
-
-
-        /* ---------------------------------------------------------------
-         * 4) Keep existing working tile hooks for airplane + bluetooth
-         * --------------------------------------------------------------- */
-        try {
-            hookSimpleTile(lpparam, "com.android.systemui.qs.tiles.AirplaneModeTile", "handleClick");
-            hookSimpleTile(lpparam, "com.android.systemui.qs.tiles.BluetoothTile", "handleClickWithSatelliteCheck");
-        } catch (Throwable ignored) {}
-    }
-
-
-    /* =====================================================================
-     * SIMPLE TILE HOOK HELPER
-     * ===================================================================== */
-    private void hookSimpleTile(XC_LoadPackage.LoadPackageParam lpparam, String className, String methodName) {
-        try {
-            Class<?> clazz = XposedHelpers.findClass(className, lpparam.classLoader);
-
-            Method m = null;
-            for (Method mm : clazz.getDeclaredMethods()) {
-                if (mm.getName().equals(methodName)) {
-                    m = mm;
-                    break;
-                }
-            }
-
-            if (m != null) {
-                XposedBridge.hookMethod(m, new XC_MethodHook() {
+                XposedBridge.hookMethod(target, new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+
                         Context ctx = getContextFromAny(param.thisObject);
                         if (ctx != null && isKeyguardLocked(ctx)) {
-                            XposedBridge.log("QSBlocker: BLOCKED " + className + "#" + methodName);
+                            XposedBridge.log("QSBlocker: Blocked footer GlobalActionsDialogLite#showOrHideDialog");
+                            rejectFeedback(ctx);
                             param.setResult(null);
                         }
                     }
                 });
 
-                XposedBridge.log("QSBlocker: Hooked " + className + "#" + methodName);
-            } else {
-                XposedBridge.log("QSBlocker: Method NOT found: " + className + "#" + methodName);
+                XposedBridge.log("QSBlocker: Hooked GlobalActionsDialogLite#showOrHideDialog");
+                return;
             }
 
         } catch (Throwable t) {
-            XposedBridge.log("QSBlocker: FAILED simpleTile hook: " + t.getMessage());
+            XposedBridge.log("QSBlocker: Failed to hook GlobalActionsDialogLite: " + t.getMessage());
         }
     }
 
+    // ----------------------------------------------------------------------
+    // Existing tile blocker (Airplane / Bluetooth)
+    // ----------------------------------------------------------------------
+    private void hookSimpleTile(XC_LoadPackage.LoadPackageParam lpparam, String className, String methodName) {
+        try {
+            Class<?> clazz = XposedHelpers.findClass(className, lpparam.classLoader);
+            Method target = null;
 
-    /* =====================================================================
-     * CONTEXT HELPERS
-     * ===================================================================== */
+            for (Method m : clazz.getDeclaredMethods()) {
+                if (m.getName().equals(methodName)) {
+                    target = m;
+                    break;
+                }
+            }
+
+            if (target == null) {
+                XposedBridge.log("QSBlocker: Not found " + className + "#" + methodName);
+                return;
+            }
+
+            XposedBridge.hookMethod(target, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    Context ctx = getContextFromAny(param.thisObject);
+                    if (ctx != null && isKeyguardLocked(ctx)) {
+                        XposedBridge.log("QSBlocker: Blocked " + className + "#" + methodName);
+                        rejectFeedback(ctx);
+                        param.setResult(null);
+                    }
+                }
+            });
+
+            XposedBridge.log("QSBlocker: Hooked " + className + "#" + methodName);
+
+        } catch (Throwable t) {
+            XposedBridge.log("QSBlocker: Failed to hookSimpleTile " + className + ": " + t.getMessage());
+        }
+    }
+
+    // ----------------------------------------------------------------------
+    // Helpers
+    // ----------------------------------------------------------------------
+
+    private void rejectFeedback(Context ctx) {
+        try {
+            Toast.makeText(ctx, "Unlock to use", Toast.LENGTH_SHORT).show();
+
+            Vibrator vib = (Vibrator) ctx.getSystemService(Context.VIBRATOR_SERVICE);
+            if (vib != null) {
+                long[] pattern = new long[]{0, 40, 50, 40};
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vib.vibrate(VibrationEffect.createWaveform(pattern, -1));
+                } else {
+                    vib.vibrate(pattern, -1);
+                }
+            }
+
+        } catch (Throwable t) {
+            XposedBridge.log("QSBlocker: feedback failed: " + t.getMessage());
+        }
+    }
+
     private boolean isKeyguardLocked(Context ctx) {
         try {
             KeyguardManager km = (KeyguardManager) ctx.getSystemService(Context.KEYGUARD_SERVICE);
@@ -218,17 +225,20 @@ public class QSBlocker implements IXposedHookLoadPackage {
     }
 
     private Context getContextFromAny(Object obj) {
-        if (obj == null) return null;
         try {
-            Object ctx = XposedHelpers.getObjectField(obj, "mContext");
-            if (ctx instanceof Context) return (Context) ctx;
-        } catch (Throwable ignored) {}
+            if (obj == null) return null;
 
-        try {
-            Object ctx = XposedHelpers.callMethod(obj, "getContext");
-            if (ctx instanceof Context) return (Context) ctx;
-        } catch (Throwable ignored) {}
+            Object c1 = XposedHelpers.getObjectField(obj, "mContext");
+            if (c1 instanceof Context) return (Context) c1;
 
+            try {
+                Object c2 = XposedHelpers.callMethod(obj, "getContext");
+                if (c2 instanceof Context) return (Context) c2;
+            } catch (Throwable ignored) {}
+
+            return null;
+
+        } catch (Throwable ignored) {}
         return null;
     }
 }
