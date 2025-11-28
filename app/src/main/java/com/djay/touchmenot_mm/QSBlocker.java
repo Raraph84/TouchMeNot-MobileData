@@ -33,6 +33,8 @@ public class QSBlocker implements IXposedHookLoadPackage {
         // Keep existing working tile hooks
         hookSimpleTile(lpparam, "com.android.systemui.qs.tiles.AirplaneModeTile", "handleClick");
         hookSimpleTile(lpparam, "com.android.systemui.qs.tiles.BluetoothTile", "handleClickWithSatelliteCheck");
+        // <-- Added Hotspot tile hook
+        hookSimpleTile(lpparam, "com.android.systemui.qs.tiles.HotspotTile", "handleClick");
     }
 
     // ----------------------------------------------------------------------
@@ -154,7 +156,7 @@ public class QSBlocker implements IXposedHookLoadPackage {
     }
 
     // ----------------------------------------------------------------------
-    // Existing tile blocker (Airplane / Bluetooth)
+    // Existing tile blocker (Airplane / Bluetooth / Hotspot)
     // ----------------------------------------------------------------------
     private void hookSimpleTile(XC_LoadPackage.LoadPackageParam lpparam, String className, String methodName) {
         try {
