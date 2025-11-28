@@ -5,203 +5,161 @@ import android.content.Context;
 import android.os.Build;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
-import android.widget.Toast;
 import android.view.View;
+import android.widget.Toast;
 
 import java.lang.reflect.Method;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 public class QSBlocker implements IXposedHookLoadPackage {
-
     private static final String SYSTEMUI = "com.android.systemui";
 
     @Override
     public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
         if (!SYSTEMUI.equals(lpparam.packageName)) return;
 
-        XposedBridge.log("QSBlocker: Loaded into SystemUI with feedback");
-
+        Logger.hookSuccess("QSBlocker:init");
         hookQSTileImplClick(lpparam);
         hookInternetDialog(lpparam);
         hookFooterPowerButton(lpparam);
 
-        // Keep existing working tile hooks
+        // existing tile hooks (including Hotspot)
         hookSimpleTile(lpparam, "com.android.systemui.qs.tiles.AirplaneModeTile", "handleClick");
         hookSimpleTile(lpparam, "com.android.systemui.qs.tiles.BluetoothTile", "handleClickWithSatelliteCheck");
-        // <-- Added Hotspot tile hook
         hookSimpleTile(lpparam, "com.android.systemui.qs.tiles.HotspotTile", "handleClick");
     }
 
-    // ----------------------------------------------------------------------
-    // 1. BLOCK QSTileImpl#click for InternetTile
-    // ----------------------------------------------------------------------
     private void hookQSTileImplClick(XC_LoadPackage.LoadPackageParam lpparam) {
         try {
-            Class<?> qstileImpl = XposedHelpers.findClass(
-                    "com.android.systemui.qs.tileimpl.QSTileImpl",
-                    lpparam.classLoader
-            );
-
+            Class<?> qstileImpl = XposedHelpers.findClass("com.android.systemui.qs.tileimpl.QSTileImpl", lpparam.classLoader);
             for (Method m : qstileImpl.getDeclaredMethods()) {
-                if (!m.getName().equals("click"))
-                    continue;
-
-                XposedBridge.hookMethod(m, new XC_MethodHook() {
+                if (!"click".equals(m.getName())) continue;
+                de.robv.android.xposed.XposedBridge.hookMethod(m, new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        Object thisObj = param.thisObject;
-                        if (thisObj == null) return;
-
-                        Context ctx = getContextFromAny(thisObj);
-                        if (ctx == null) return;
-
-                        if (!isKeyguardLocked(ctx)) return;
-
-                        String instName = thisObj.getClass().getName();
-                        if (instName.contains("InternetTile")) {
-                            XposedBridge.log("QSBlocker: Blocked InternetTile via QSTileImpl#click");
-                            rejectFeedback(ctx);
-                            param.setResult(null);
+                        try {
+                            Object thisObj = param.thisObject;
+                            if (thisObj == null) return;
+                            Context ctx = getContextFromAny(thisObj);
+                            if (ctx == null) return;
+                            if (!isKeyguardLocked(ctx)) return;
+                            String instName = thisObj.getClass().getName();
+                            if (instName.contains("InternetTile")) {
+                                rejectFeedback(ctx);
+                                param.setResult(null);
+                                Logger.blocked("QSTileImpl#click", "InternetTile_blocked");
+                            }
+                        } catch (Throwable t) {
+                            Logger.error("QSTileImpl#click", t.getMessage());
                         }
                     }
                 });
-
-                XposedBridge.log("QSBlocker: Hooked QSTileImpl#click");
+                Logger.hookSuccess("QSTileImpl#click hooked");
                 return;
             }
-
+            Logger.hookFail("QSTileImpl#click", "method_not_found");
         } catch (Throwable t) {
-            XposedBridge.log("QSBlocker: Failed hook on QSTileImpl#click: " + t.getMessage());
+            Logger.hookFail("QSTileImpl", t.getMessage());
         }
     }
 
-    // ----------------------------------------------------------------------
-    // 2. BLOCK InternetDialogControllerImpl (wifi/data dialog)
-    // ----------------------------------------------------------------------
     private void hookInternetDialog(XC_LoadPackage.LoadPackageParam lpparam) {
         try {
-            Class<?> clazz = XposedHelpers.findClass(
-                    "com.android.systemui.qs.tiles.dialog.InternetDialogControllerImpl",
-                    lpparam.classLoader
-            );
-
+            Class<?> clazz = XposedHelpers.findClass("com.android.systemui.qs.tiles.dialog.InternetDialogControllerImpl", lpparam.classLoader);
             for (Method m : clazz.getDeclaredMethods()) {
-                if (!m.getName().equals("onUserClickedInternetDialog"))
-                    continue;
-
-                Method target = m;
-                XposedBridge.hookMethod(target, new XC_MethodHook() {
+                if (!"onUserClickedInternetDialog".equals(m.getName())) continue;
+                de.robv.android.xposed.XposedBridge.hookMethod(m, new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-
-                        Context ctx = getContextFromAny(param.thisObject);
-                        if (ctx != null && isKeyguardLocked(ctx)) {
-                            XposedBridge.log("QSBlocker: Blocked InternetDialogControllerImpl#onUserClickedInternetDialog");
-                            rejectFeedback(ctx);
-                            param.setResult(null);
+                        try {
+                            Context ctx = getContextFromAny(param.thisObject);
+                            if (ctx != null && isKeyguardLocked(ctx)) {
+                                rejectFeedback(ctx);
+                                param.setResult(null);
+                                Logger.blocked("InternetDialogControllerImpl#onUserClickedInternetDialog", "keyguard_locked");
+                            }
+                        } catch (Throwable t) {
+                            Logger.error("InternetDialogControllerImpl#onUserClickedInternetDialog", t.getMessage());
                         }
                     }
                 });
-
-                XposedBridge.log("QSBlocker: Hooked InternetDialogControllerImpl#onUserClickedInternetDialog");
+                Logger.hookSuccess("InternetDialogControllerImpl#onUserClickedInternetDialog hooked");
                 return;
             }
-
+            Logger.hookFail("InternetDialogControllerImpl#onUserClickedInternetDialog", "method_not_found");
         } catch (Throwable t) {
-            XposedBridge.log("QSBlocker: Failed hook on InternetDialogControllerImpl: " + t.getMessage());
+            Logger.hookFail("InternetDialogControllerImpl", t.getMessage());
         }
     }
 
-    // ----------------------------------------------------------------------
-    // 3. BLOCK Footer power menu (GlobalActionsDialogLite#showOrHideDialog)
-    // ----------------------------------------------------------------------
     private void hookFooterPowerButton(XC_LoadPackage.LoadPackageParam lpparam) {
         try {
-            Class<?> clazz = XposedHelpers.findClass(
-                    "com.android.systemui.globalactions.GlobalActionsDialogLite",
-                    lpparam.classLoader
-            );
-
+            Class<?> clazz = XposedHelpers.findClass("com.android.systemui.globalactions.GlobalActionsDialogLite", lpparam.classLoader);
             for (Method m : clazz.getDeclaredMethods()) {
-                if (!m.getName().equals("showOrHideDialog"))
-                    continue;
-
-                Method target = m;
-
-                XposedBridge.hookMethod(target, new XC_MethodHook() {
+                if (!"showOrHideDialog".equals(m.getName())) continue;
+                de.robv.android.xposed.XposedBridge.hookMethod(m, new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-
-                        Context ctx = getContextFromAny(param.thisObject);
-                        if (ctx != null && isKeyguardLocked(ctx)) {
-                            XposedBridge.log("QSBlocker: Blocked footer GlobalActionsDialogLite#showOrHideDialog");
-                            rejectFeedback(ctx);
-                            param.setResult(null);
+                        try {
+                            Context ctx = getContextFromAny(param.thisObject);
+                            if (ctx != null && isKeyguardLocked(ctx)) {
+                                rejectFeedback(ctx);
+                                param.setResult(null);
+                                Logger.blocked("GlobalActionsDialogLite#showOrHideDialog", "keyguard_locked");
+                            }
+                        } catch (Throwable t) {
+                            Logger.error("GlobalActionsDialogLite#showOrHideDialog", t.getMessage());
                         }
                     }
                 });
-
-                XposedBridge.log("QSBlocker: Hooked GlobalActionsDialogLite#showOrHideDialog");
+                Logger.hookSuccess("GlobalActionsDialogLite#showOrHideDialog hooked");
                 return;
             }
-
+            Logger.hookFail("GlobalActionsDialogLite#showOrHideDialog", "method_not_found");
         } catch (Throwable t) {
-            XposedBridge.log("QSBlocker: Failed to hook GlobalActionsDialogLite: " + t.getMessage());
+            Logger.hookFail("GlobalActionsDialogLite", t.getMessage());
         }
     }
 
-    // ----------------------------------------------------------------------
-    // Existing tile blocker (Airplane / Bluetooth / Hotspot)
-    // ----------------------------------------------------------------------
     private void hookSimpleTile(XC_LoadPackage.LoadPackageParam lpparam, String className, String methodName) {
         try {
             Class<?> clazz = XposedHelpers.findClass(className, lpparam.classLoader);
             Method target = null;
-
             for (Method m : clazz.getDeclaredMethods()) {
-                if (m.getName().equals(methodName)) {
-                    target = m;
-                    break;
-                }
+                if (methodName.equals(m.getName())) { target = m; break; }
             }
-
             if (target == null) {
-                XposedBridge.log("QSBlocker: Not found " + className + "#" + methodName);
+                Logger.hookFail(className + "#" + methodName, "method_not_found");
                 return;
             }
-
-            XposedBridge.hookMethod(target, new XC_MethodHook() {
+            de.robv.android.xposed.XposedBridge.hookMethod(target, new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    Context ctx = getContextFromAny(param.thisObject);
-                    if (ctx != null && isKeyguardLocked(ctx)) {
-                        XposedBridge.log("QSBlocker: Blocked " + className + "#" + methodName);
-                        rejectFeedback(ctx);
-                        param.setResult(null);
+                    try {
+                        Context ctx = getContextFromAny(param.thisObject);
+                        if (ctx != null && isKeyguardLocked(ctx)) {
+                            rejectFeedback(ctx);
+                            param.setResult(null);
+                            Logger.blocked(className + "#" + methodName, "keyguard_locked");
+                        }
+                    } catch (Throwable t) {
+                        Logger.error(className + "#" + methodName, t.getMessage());
                     }
                 }
             });
-
-            XposedBridge.log("QSBlocker: Hooked " + className + "#" + methodName);
-
+            Logger.hookSuccess(className + "#" + methodName + " hooked");
         } catch (Throwable t) {
-            XposedBridge.log("QSBlocker: Failed to hookSimpleTile " + className + ": " + t.getMessage());
+            Logger.hookFail(className, t.getMessage());
         }
     }
-
-    // ----------------------------------------------------------------------
-    // Helpers
-    // ----------------------------------------------------------------------
 
     private void rejectFeedback(Context ctx) {
         try {
             Toast.makeText(ctx, "Unlock to use", Toast.LENGTH_SHORT).show();
-
             Vibrator vib = (Vibrator) ctx.getSystemService(Context.VIBRATOR_SERVICE);
             if (vib != null) {
                 long[] pattern = new long[]{0, 40, 50, 40};
@@ -211,9 +169,8 @@ public class QSBlocker implements IXposedHookLoadPackage {
                     vib.vibrate(pattern, -1);
                 }
             }
-
         } catch (Throwable t) {
-            XposedBridge.log("QSBlocker: feedback failed: " + t.getMessage());
+            Logger.error("rejectFeedback", t.getMessage());
         }
     }
 
@@ -229,17 +186,13 @@ public class QSBlocker implements IXposedHookLoadPackage {
     private Context getContextFromAny(Object obj) {
         try {
             if (obj == null) return null;
-
-            Object c1 = XposedHelpers.getObjectField(obj, "mContext");
+            Object c1 = null;
+            try { c1 = XposedHelpers.getObjectField(obj, "mContext"); } catch (Throwable ignored) {}
             if (c1 instanceof Context) return (Context) c1;
-
             try {
                 Object c2 = XposedHelpers.callMethod(obj, "getContext");
                 if (c2 instanceof Context) return (Context) c2;
             } catch (Throwable ignored) {}
-
-            return null;
-
         } catch (Throwable ignored) {}
         return null;
     }

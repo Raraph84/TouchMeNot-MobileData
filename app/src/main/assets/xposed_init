@@ -1,4 +1,3 @@
-com.djay.touchmenot_mm.Hooks
-
-com.djay.touchmenot_mm.RecorderHook
+com.djay.touchmenot_mm.VolPwrBlocker
+com.djay.touchmenot_mm.Logger
 com.djay.touchmenot_mm.QSBlocker
