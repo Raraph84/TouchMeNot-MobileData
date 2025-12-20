@@ -64,6 +64,9 @@ dependencies {
     // core-ktx from your file: 1.15.0
     implementation("androidx.core:core-ktx:1.15.0")
 
+    // Biometric authentication
+    implementation("androidx.biometric:biometric:1.1.0")
+
     // Xposed compile-only API
     compileOnly(files("libs/xposed-api-82.jar"))
 }
