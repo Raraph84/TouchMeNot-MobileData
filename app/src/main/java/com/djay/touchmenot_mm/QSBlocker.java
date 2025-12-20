@@ -17,6 +17,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 public class QSBlocker implements IXposedHookLoadPackage {
     private static final String SYSTEMUI = "com.android.systemui";
+    // Feature flags are provided via PreferencesProvider and cached in FeatureFlags
 
     @Override
     public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
@@ -46,9 +47,11 @@ public class QSBlocker implements IXposedHookLoadPackage {
                             if (thisObj == null) return;
                             Context ctx = getContextFromAny(thisObj);
                             if (ctx == null) return;
+                            FeatureFlags.ensureInitialized(ctx);
                             if (!isKeyguardLocked(ctx)) return;
                             String instName = thisObj.getClass().getName();
                             if (instName.contains("InternetTile")) {
+                                if (!FeatureFlags.blockInternet()) return;
                                 rejectFeedback(ctx);
                                 param.setResult(null);
                                 Logger.blocked("QSTileImpl#click", "InternetTile_blocked");
@@ -77,10 +80,14 @@ public class QSBlocker implements IXposedHookLoadPackage {
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                         try {
                             Context ctx = getContextFromAny(param.thisObject);
-                            if (ctx != null && isKeyguardLocked(ctx)) {
-                                rejectFeedback(ctx);
-                                param.setResult(null);
-                                Logger.blocked("InternetDialogControllerImpl#onUserClickedInternetDialog", "keyguard_locked");
+                            if (ctx != null) {
+                                FeatureFlags.ensureInitialized(ctx);
+                                if (isKeyguardLocked(ctx)) {
+                                    if (!FeatureFlags.blockInternet()) return;
+                                    rejectFeedback(ctx);
+                                    param.setResult(null);
+                                    Logger.blocked("InternetDialogControllerImpl#onUserClickedInternetDialog", "keyguard_locked");
+                                }
                             }
                         } catch (Throwable t) {
                             Logger.error("InternetDialogControllerImpl#onUserClickedInternetDialog", t.getMessage());
@@ -106,10 +113,14 @@ public class QSBlocker implements IXposedHookLoadPackage {
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                         try {
                             Context ctx = getContextFromAny(param.thisObject);
-                            if (ctx != null && isKeyguardLocked(ctx)) {
-                                rejectFeedback(ctx);
-                                param.setResult(null);
-                                Logger.blocked("GlobalActionsDialogLite#showOrHideDialog", "keyguard_locked");
+                            if (ctx != null) {
+                                FeatureFlags.ensureInitialized(ctx);
+                                if (isKeyguardLocked(ctx)) {
+                                    if (!FeatureFlags.blockFooterPowerMenu()) return;
+                                    rejectFeedback(ctx);
+                                    param.setResult(null);
+                                    Logger.blocked("GlobalActionsDialogLite#showOrHideDialog", "keyguard_locked");
+                                }
                             }
                         } catch (Throwable t) {
                             Logger.error("GlobalActionsDialogLite#showOrHideDialog", t.getMessage());
@@ -141,6 +152,19 @@ public class QSBlocker implements IXposedHookLoadPackage {
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                     try {
                         Context ctx = getContextFromAny(param.thisObject);
+                        if (ctx == null) return;
+                        FeatureFlags.ensureInitialized(ctx);
+                        boolean shouldBlock;
+                        if (className.endsWith("AirplaneModeTile")) {
+                            shouldBlock = FeatureFlags.blockAirplane();
+                        } else if (className.endsWith("BluetoothTile")) {
+                            shouldBlock = FeatureFlags.blockBluetooth();
+                        } else if (className.endsWith("HotspotTile")) {
+                            shouldBlock = FeatureFlags.blockHotspot();
+                        } else {
+                            shouldBlock = true;
+                        }
+                        if (!shouldBlock) return;
                         if (ctx != null && isKeyguardLocked(ctx)) {
                             rejectFeedback(ctx);
                             param.setResult(null);
@@ -196,4 +220,6 @@ public class QSBlocker implements IXposedHookLoadPackage {
         } catch (Throwable ignored) {}
         return null;
     }
+
+    // No XSharedPreferences; flags are provided via ContentProvider
 }

@@ -1,9 +1,5 @@
 package com.djay.touchmenot_mm;
 
-import de.robv.android.xposed.IXposedHookLoadPackage;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.callbacks.XC_LoadPackage;
-
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -14,19 +10,18 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class Logger implements IXposedHookLoadPackage {
+/**
+ * Logger utility for hook events.
+ * No Xposed dependencies to ensure this class can be loaded in any context.
+ */
+public class Logger {
     private static final String TAG = "TouchMeNot_Log";
     private static final String LOG_PATH = "/sdcard/Download/touchmenot_recorder.log";
     private static final AtomicBoolean inited = new AtomicBoolean(false);
     private static volatile Writer writer = null;
 
-    @Override
-    public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
-        // initialize once (we only need to create/truncate the file once; SystemUI or any package is fine)
-        initOnce();
-    }
-
-    private static void initOnce() {
+    // Initialize logger (called by hooks during initialization)
+    public static void initOnce() {
         if (inited.compareAndSet(false, true)) {
             try {
                 File f = new File(LOG_PATH);
@@ -39,9 +34,7 @@ public class Logger implements IXposedHookLoadPackage {
                     fos.flush();
                 }
                 writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f, true)));
-                XposedBridge.log(TAG + ": logger initialized -> " + LOG_PATH);
             } catch (Throwable t) {
-                XposedBridge.log(TAG + ": logger init failed: " + t.getMessage());
                 writer = null;
             }
         }
@@ -67,7 +60,6 @@ public class Logger implements IXposedHookLoadPackage {
                 w.flush();
             }
         } catch (Throwable t) {
-            try { XposedBridge.log(TAG + ": write failed: " + t.getMessage()); } catch (Throwable ignored) {}
             writer = null;
         }
     }
@@ -91,4 +83,6 @@ public class Logger implements IXposedHookLoadPackage {
     public static void error(String what, String reason) {
         log("ERROR", what + " -> " + reason);
     }
+
+    // logging toggle removed; logger always enabled
 }

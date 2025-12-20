@@ -7,6 +7,26 @@
         android:allowBackup="false"
         android:exported="false">
 
+        <!-- Launcher Activity for settings UI -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.TouchMeNot_MM">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Read-only ContentProvider exposing feature toggle state to hooked processes -->
+        <provider
+            android:name=".PreferencesProvider"
+            android:authorities="com.djay.touchmenot_mm.preferences"
+            android:exported="true"
+            android:directBootAware="true"
+            android:grantUriPermissions="false" />
+
         <!-- LSPosed/Xposed module metadata -->
         <meta-data
             android:name="xposedmodule"

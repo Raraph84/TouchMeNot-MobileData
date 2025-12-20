@@ -16,7 +16,6 @@ import java.lang.reflect.Method;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
@@ -26,6 +25,7 @@ public class VolPwrBlocker implements IXposedHookLoadPackage {
 
     private static boolean isPowerKeyHeld = false;
     private static boolean isVolumeUpKeyHeld = false;
+    // Feature flags come from PreferencesProvider via FeatureFlags
 
     @Override
     public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
@@ -44,6 +44,8 @@ public class VolPwrBlocker implements IXposedHookLoadPackage {
                     try {
                         Context ctx = getContextFromObject(param.thisObject);
                         if (ctx == null) return;
+                        FeatureFlags.ensureInitialized(ctx);
+                        if (!FeatureFlags.blockPowerControls()) return;
                         KeyguardManager km = (KeyguardManager) ctx.getSystemService(Context.KEYGUARD_SERVICE);
                         if (km != null && km.isKeyguardLocked()) {
                             param.setResult(null);
@@ -79,8 +81,10 @@ public class VolPwrBlocker implements IXposedHookLoadPackage {
                             if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) isVolumeUpKeyHeld = true;
 
                             if (isPowerKeyHeld && isVolumeUpKeyHeld) {
-                                param.setResult(0); // prevent default fingerprint/pop
                                 Context ctx = getContextFromObject(param.thisObject);
+                                if (ctx != null) FeatureFlags.ensureInitialized(ctx);
+                                if (!FeatureFlags.blockPowerControls()) return;
+                                param.setResult(0); // prevent default fingerprint/pop
                                 Logger.blocked("Power+VolUp", "combination_detected_while_locked");
                                 if (ctx != null) {
                                     KeyguardManager km = (KeyguardManager) ctx.getSystemService(Context.KEYGUARD_SERVICE);
@@ -143,6 +147,8 @@ public class VolPwrBlocker implements IXposedHookLoadPackage {
         }
         return null;
     }
+
+    // No XSharedPreferences: flags read via FeatureFlags
 
     private void dispatchFeedback(Context ctx, String message) {
         if (ctx == null) return;
