@@ -11,7 +11,7 @@ class MainActivity : ComponentActivity() {
         PrefsBridge.makeWorldReadable(this)
         setContent {
             TouchMeNot_MMTheme {
-                SettingsScreen(this)
+                HomeScreen(this)
             }
         }
     }

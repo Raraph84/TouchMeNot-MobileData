@@ -49,7 +49,7 @@ public class VolPwrBlocker implements IXposedHookLoadPackage {
                         KeyguardManager km = (KeyguardManager) ctx.getSystemService(Context.KEYGUARD_SERVICE);
                         if (km != null && km.isKeyguardLocked()) {
                             param.setResult(null);
-                            dispatchFeedback(ctx, "Unlock to access Power Menu");
+                            dispatchFeedback(ctx, "Unlock to use");
                             Logger.blocked("PhoneWindowManager#showGlobalActions", "keyguard_locked");
                         }
                     } catch (Throwable t) {
