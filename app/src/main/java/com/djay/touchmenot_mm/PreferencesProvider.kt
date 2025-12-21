@@ -34,8 +34,10 @@ class PreferencesProvider : ContentProvider() {
         val app = context?.applicationContext ?: return true
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             val dpCtx = app.createDeviceProtectedStorageContext()
-            // No-op move if already present
-            app.moveSharedPreferencesFrom(dpCtx, PREFS_NAME)
+            // Move SharedPreferences from credential-protected storage to device-protected storage
+            // so they are available early (e.g., before user unlock).
+            // This moves FROM 'app' (credential) TO 'dpCtx' (device protected).
+            dpCtx.moveSharedPreferencesFrom(app, PREFS_NAME)
         }
         // Migrate legacy keys into unified ones if missing
         try {

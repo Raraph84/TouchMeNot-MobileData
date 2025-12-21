@@ -15,7 +15,8 @@ object PrefsBridge {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             try {
                 val dp = ctx.applicationContext.createDeviceProtectedStorageContext()
-                ctx.applicationContext.moveSharedPreferencesFrom(dp, PREFS_NAME)
+                // Move SharedPreferences from credential-protected storage (app) to device-protected storage (dp)
+                dp.moveSharedPreferencesFrom(ctx.applicationContext, PREFS_NAME)
             } catch (t: Throwable) {
                 Log.w("PrefsBridge", "DPS move failed: ${t.message}")
             }
