@@ -88,7 +88,6 @@ fun HomeScreen(ctx: Context) {
                     title = "LSPosed Permissions",
                     infoText = "\nIn order to use this Module, please enable the following permissions in LSposed Manager and restart your phone.",
                     bulletPoints = listOf(
-                        "Android System",
                         "System Framework",
                         "System UI"
                     )

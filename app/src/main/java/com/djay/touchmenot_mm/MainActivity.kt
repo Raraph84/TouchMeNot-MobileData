@@ -5,9 +5,20 @@ import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import com.djay.touchmenot_mm.ui.theme.TouchMeNot_MMTheme
@@ -84,7 +95,32 @@ class MainActivity : FragmentActivity() {
     private fun setMainContent() {
         setContent {
             TouchMeNot_MMTheme {
-                HomeScreen(this)
+                // Use a mutable state that triggers animation when isAuthenticated changes
+                var showContent by remember { mutableStateOf(false) }
+                
+                // Trigger animation when authenticated
+                LaunchedEffect(isAuthenticated) {
+                    if (isAuthenticated) {
+                        showContent = true
+                    }
+                }
+                
+                // Animated entry with zoom-in + fade
+                AnimatedVisibility(
+                    visible = showContent,
+                    enter = fadeIn(animationSpec = tween(1000)) + scaleIn(
+                        initialScale = 0.85f,
+                        animationSpec = tween(1000)
+                    ),
+                    exit = fadeOut(animationSpec = tween(300)) + scaleOut(
+                        targetScale = 0.85f,
+                        animationSpec = tween(300)
+                    )
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        HomeScreen(this@MainActivity)
+                    }
+                }
             }
         }
     }
