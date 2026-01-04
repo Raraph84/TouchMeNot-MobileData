@@ -53,7 +53,7 @@ class MainActivity : FragmentActivity() {
                     isAuthenticated = true
                     setMainContent()
                 }
-                
+
                 override fun onAuthenticationFailed() {
                     super.onAuthenticationFailed()
                     Toast.makeText(this@MainActivity, "Authentication failed", Toast.LENGTH_SHORT).show()
