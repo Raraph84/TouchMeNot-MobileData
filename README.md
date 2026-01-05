@@ -114,8 +114,8 @@ TouchMeNot is built with a "Security First" philosophy. Because this module hand
 
 We believe in community-driven security. Whether you are a developer looking to optimize code or a user with a great idea, your input is what makes TouchMeNot better for everyone.
 
-* **Pull Requests:** Contributions are highly encouraged! Whether it's a bug fix, performance optimization, a new protection feature, or a UI/UX polish, feel free to submit a PR.
-* **Issue Tracking:** If you encounter a bug or have a suggestion, please use our provided [templates](https://github.com/theDjay2529/TouchMeNot/issues/new/choose) to help us address it quickly.
+* **Pull Requests:** Contributions are highly encouraged! Whether it's a bug fix, performance optimization, a new protection feature, or a UI/UX polish, feel free to submit a PR or a [Featue Request template](https://github.com/theDjay2529/TouchMeNot/issues/new?template=feature_request.md).
+* **Issue Tracking:** If you encounter a bug or have a suggestion, please use our provided [Bug Report template](https://github.com/theDjay2529/TouchMeNot/issues/new?template=bug_report.md) to help us address it quickly.
 * **Join the Conversation:** For real-time help, feedback, or to chat with other users, join our **[Telegram Community](https://t.me/+uJDDVqXDoMViMTA1)**. We are always happy to help and hear your thoughts.
 
 ---
