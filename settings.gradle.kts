@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TouchMeNot_MM"
+rootProject.name = "TouchMeNot"
 include(":app")

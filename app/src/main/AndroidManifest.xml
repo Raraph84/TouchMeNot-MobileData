@@ -1,11 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.djay.touchmenot_mm">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
         android:label="@string/app_name"
         android:allowBackup="false"
-        android:exported="false">
+        android:exported="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round">
+
+        <!-- Launcher Activity for settings UI -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.TouchMeNot">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Read-only ContentProvider exposing feature toggle state to hooked processes -->
+        <provider
+            android:name=".PreferencesProvider"
+            android:authorities="com.djay.touchmenot.preferences"
+            android:exported="true"
+            android:directBootAware="true"
+            android:grantUriPermissions="false" />
 
         <!-- LSPosed/Xposed module metadata -->
         <meta-data
