@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.djay.touchmenot_mm"
+    namespace = "com.djay.touchmenot"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.djay.touchmenot_mm"
+        applicationId = "com.djay.touchmenot"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

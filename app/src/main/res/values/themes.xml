@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.TouchMeNot_MM" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.TouchMeNot" parent="android:Theme.Material.NoActionBar">
         <!-- Force dark background while biometric prompt is shown -->
         <item name="android:windowBackground">#000000</item>
         <item name="android:statusBarColor">#000000</item>
