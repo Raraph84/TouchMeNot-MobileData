@@ -128,6 +128,6 @@ We believe in community-driven security. Whether you are a developer looking to 
    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=theDjay2529/TouchMeNot&type=timeline&legend=top-left" />
    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=theDjay2529/TouchMeNot&type=timeline&legend=top-left" />
  </picture>
-</a>
+</a> 
 
 ---
