@@ -42,6 +42,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -90,7 +93,8 @@ fun HomeScreen(ctx: Context) {
                     bulletPoints = listOf(
                         "System Framework",
                         "System UI"
-                    )
+                    ),
+                    note = "In case you are not able to find System UI in Lsposed: \nOpen Lsposed > Click on our Module > Top-right 3 dots > Hide > UNCHECK System apps"
                 )
             }
 
@@ -194,7 +198,7 @@ fun HomeScreen(ctx: Context) {
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Current Version: V1.0",
+                                text = "Current Version: V1.1",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color.White.copy(alpha = 0.7f)
@@ -435,7 +439,7 @@ fun PowerMenuTile(isEnabled: Boolean, onToggle: (Boolean) -> Unit) {
 }
 
 @Composable
-fun InfoTile(title: String, infoText: String, bulletPoints: List<String>) {
+fun InfoTile(title: String, infoText: String, bulletPoints: List<String>, note: String? = null) {
     var isExpanded by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
     
@@ -537,6 +541,28 @@ fun InfoTile(title: String, infoText: String, bulletPoints: List<String>) {
                                 fontWeight = FontWeight.Normal
                             )
                         }
+                    }
+                    
+                    // Display note if provided
+                    note?.let { noteText ->
+                        Spacer(modifier = Modifier.height(10.dp))
+                        val annotatedNote = buildAnnotatedString {
+                            val parts = noteText.split("System UI")
+                            append(parts[0])
+                            if (parts.size > 1) {
+                                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                                    append("System UI")
+                                }
+                                append(parts[1])
+                            }
+                        }
+                        Text(
+                            text = annotatedNote,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = Color.White.copy(alpha = 0.5f),
+                            lineHeight = 13.sp
+                        )
                     }
                 }
             }
