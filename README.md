@@ -23,9 +23,30 @@
 
 ---
 
+
+## 📺 Was Featured In
+
+### **YouTube: Android Verse and Tech Karan**
+> <p align="center">
+>   <a href="https://www.youtube.com/watch?v=gpc49l-ie7o">
+>     <img src="https://img.youtube.com/vi/gpc49l-ie7o/maxresdefault.jpg" width="100%" alt="TouchMeNot Featured Video">
+>   </a>
+> </p>
+
+### **Read Full article here:**
+<p align="center">
+  <a href="https://www.techkaran.com/2026/01/this-lsposed-magisk-module-makes-rooted.html">
+    <img src="https://img.shields.io/badge/Read_The_Full_Article_on_TechKaran.com-FF5722?style=for-the-badge&logo=rss&logoColor=white" alt="Tech Article">
+  </a>
+</p>
+
+
+---
+
 ## Navigation
 
-* [Features](#key-features)
+* [Features](#features)
+* [Featured In](#-featured-in)
 * [Screenshots](#screenshots)
 * [Installation Guide](#installation-guide)
 * [Requirements](#requirements)
