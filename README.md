@@ -45,8 +45,8 @@
 
 ## Navigation
 
+* [Featured In](#-was-featured-in)
 * [Features](#features)
-* [Featured In](#-featured-in)
 * [Screenshots](#screenshots)
 * [Installation Guide](#installation-guide)
 * [Requirements](#requirements)
