@@ -68,12 +68,25 @@ public class QSBlocker implements IXposedHookLoadPackage {
         } catch (Throwable t) {
             DiagnosticLogger.log("HOOK_FAIL", "CellularTile#handleSecondaryClick not found: " + t.getMessage());
         }
+        try {
+            hookSimpleTile(lpparam, "com.android.systemui.qs.tiles.MobileDataTile", "handleClick");
+            DiagnosticLogger.log("HOOK", "MobileDataTile#handleClick attempted (LineageOS Mobile Data)");
+        } catch (Throwable t) {
+            DiagnosticLogger.log("HOOK_FAIL", "MobileDataTile#handleClick not found: " + t.getMessage());
+        }
+        try {
+            hookSimpleTile(lpparam, "com.android.systemui.qs.tiles.MobileDataTile", "handleSecondaryClick");
+            DiagnosticLogger.log("HOOK", "MobileDataTile#handleSecondaryClick attempted (LineageOS Mobile Data)");
+        } catch (Throwable t) {
+            DiagnosticLogger.log("HOOK_FAIL", "MobileDataTile#handleSecondaryClick not found: " + t.getMessage());
+        }
 
         // Inspect available methods on target tiles to capture exact names in logs
         logClassMethods(lpparam, "com.android.systemui.qs.tiles.BluetoothTile");
         logClassMethods(lpparam, "com.android.systemui.qs.tiles.WifiTile");
         logClassMethods(lpparam, "com.android.systemui.qs.tiles.InternetTile");
         logClassMethods(lpparam, "com.android.systemui.qs.tiles.CellularTile");
+        logClassMethods(lpparam, "com.android.systemui.qs.tiles.MobileDataTile");
 
         // Log touch interaction entrypoints to help trace which tile view is used
         hookQSTileViewTouchLogging(lpparam);
@@ -309,6 +322,8 @@ public class QSBlocker implements IXposedHookLoadPackage {
                         } else if (className.endsWith("WifiTile")) {
                             shouldBlock = FeatureFlags.blockInternet();
                         } else if (className.endsWith("CellularTile")) {
+                            shouldBlock = FeatureFlags.blockInternet();
+                        } else if (className.endsWith("MobileDataTile")) {
                             shouldBlock = FeatureFlags.blockInternet();
                         } else {
                             shouldBlock = true;
