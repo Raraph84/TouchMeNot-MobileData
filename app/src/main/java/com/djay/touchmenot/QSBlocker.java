@@ -173,8 +173,9 @@ public class QSBlocker implements IXposedHookLoadPackage {
         };
 
         tryHookFooterClass(lpparam, "com.android.systemui.globalactions.GlobalActionsDialogLite", globalActionMethods);
-        tryHookFooterClass(lpparam, "com.android.systemui.globalactions.GlobalActionsDialog", globalActionMethods);
+        tryHookFooterClass(lpparam, "com.android.systemui.globalactions.GlobalActionsDialogLite$ActionsDialogLite", globalActionMethods);
         tryHookFooterClass(lpparam, "com.android.systemui.globalactions.GlobalActionsDialogLite$GlobalActionsDialogLite", globalActionMethods);
+        tryHookFooterClass(lpparam, "com.android.systemui.globalactions.GlobalActionsDialog", globalActionMethods);
         tryHookFooterClass(lpparam, "com.android.systemui.statusbar.phone.PhoneStatusBar", globalActionMethods);
         tryHookFooterClass(lpparam, "com.android.systemui.qs.footer.ui.viewmodel.FooterActionsViewModel", footerMethods);
         tryHookFooterClass(lpparam, "com.android.systemui.qs.footer.ui.viewmodel.FooterActionsViewModelImpl", footerMethods);
