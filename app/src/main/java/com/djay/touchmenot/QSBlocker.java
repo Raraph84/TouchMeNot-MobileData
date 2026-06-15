@@ -172,6 +172,8 @@ public class QSBlocker implements IXposedHookLoadPackage {
             "openPowerMenu"
         };
 
+        hookGlobalActionsClass(lpparam, "com.android.systemui.globalactions.GlobalActionsDialogLite");
+        hookGlobalActionsClass(lpparam, "com.android.systemui.globalactions.GlobalActionsDialogLite$ActionsDialogLite");
         tryHookFooterClass(lpparam, "com.android.systemui.globalactions.GlobalActionsDialogLite", globalActionMethods);
         tryHookFooterClass(lpparam, "com.android.systemui.globalactions.GlobalActionsDialogLite$ActionsDialogLite", globalActionMethods);
         tryHookFooterClass(lpparam, "com.android.systemui.globalactions.GlobalActionsDialogLite$GlobalActionsDialogLite", globalActionMethods);
@@ -219,6 +221,57 @@ public class QSBlocker implements IXposedHookLoadPackage {
             if (!hookedAny) {
                 Logger.hookFail(className, "no_target_methods");
             }
+        } catch (Throwable t) {
+            Logger.hookFail(className, t.getMessage());
+        }
+    }
+
+    private void hookGlobalActionsClass(XC_LoadPackage.LoadPackageParam lpparam, String className) {
+        try {
+            Class<?> clazz = XposedHelpers.findClass(className, lpparam.classLoader);
+            logClassMethods(lpparam, className);
+            Method target = null;
+            for (Method m : clazz.getDeclaredMethods()) {
+                String name = m.getName();
+                if ("showOrHideDialog".equals(name) || "showDialog".equals(name) || "toggleDialog".equals(name)) {
+                    target = m;
+                    break;
+                }
+            }
+            if (target == null) {
+                for (Method m : clazz.getDeclaredMethods()) {
+                    String name = m.getName();
+                    if ((name.startsWith("show") || name.startsWith("toggle")) && m.getReturnType() == void.class) {
+                        target = m;
+                        break;
+                    }
+                }
+            }
+            if (target == null) {
+                Logger.hookFail(className, "method_not_found");
+                return;
+            }
+            final String methodName = target.getName();
+            de.robv.android.xposed.XposedBridge.hookMethod(target, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    try {
+                        Context ctx = getContextFromAny(param.thisObject);
+                        if (ctx != null) {
+                            FeatureFlags.ensureInitialized(ctx);
+                            if (isKeyguardLocked(ctx)) {
+                                if (!FeatureFlags.blockFooterPowerMenu()) return;
+                                rejectFeedback(ctx);
+                                param.setResult(null);
+                                Logger.blocked(className + "#" + methodName, "keyguard_locked");
+                            }
+                        }
+                    } catch (Throwable t) {
+                        Logger.error(className + "#" + methodName, t.getMessage());
+                    }
+                }
+            });
+            Logger.hookSuccess(className + "#" + methodName + " hooked");
         } catch (Throwable t) {
             Logger.hookFail(className, t.getMessage());
         }
