@@ -12,10 +12,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Event logger for debugging hook operations and blocked actions.
- * Writes timestamped logs to /sdcard/Download/touchmenot_recorder.log
+ * Writes timestamped logs to /sdcard/Download/Touchmenot_logs
  */
 public class Logger {
-    private static final String LOG_PATH = "/sdcard/Download/touchmenot_recorder.log";
+    private static final String LOG_PATH = "/sdcard/Download/Touchmenot_logs";
     private static final AtomicBoolean inited = new AtomicBoolean(false);
     private static volatile Writer writer = null;
 
