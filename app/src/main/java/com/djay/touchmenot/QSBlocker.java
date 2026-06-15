@@ -3,9 +3,10 @@ package com.djay.touchmenot;
 import android.app.KeyguardManager;
 import android.content.Context;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
-import android.view.View;
 import android.widget.Toast;
 
 import java.lang.reflect.Method;
@@ -149,35 +150,76 @@ public class QSBlocker implements IXposedHookLoadPackage {
     }
 
     private void hookFooterPowerButton(XC_LoadPackage.LoadPackageParam lpparam) {
+        String[] globalActionMethods = new String[]{
+            "showOrHideDialog",
+            "showDialog",
+            "show",
+            "showGlobalActions",
+            "showGlobalActionsDialog",
+            "openGlobalActions",
+            "openPowerMenu",
+            "showPowerMenu"
+        };
+
+        String[] footerMethods = new String[]{
+            "onPowerMenuClicked",
+            "onPowerMenuButtonClicked",
+            "onPowerButtonClicked",
+            "onPowerMenuClick",
+            "onPowerClick",
+            "showPowerMenu",
+            "showGlobalActions",
+            "openPowerMenu"
+        };
+
+        tryHookFooterClass(lpparam, "com.android.systemui.globalactions.GlobalActionsDialogLite", globalActionMethods);
+        tryHookFooterClass(lpparam, "com.android.systemui.globalactions.GlobalActionsDialog", globalActionMethods);
+        tryHookFooterClass(lpparam, "com.android.systemui.globalactions.GlobalActionsDialogLite$GlobalActionsDialogLite", globalActionMethods);
+        tryHookFooterClass(lpparam, "com.android.systemui.statusbar.phone.PhoneStatusBar", globalActionMethods);
+        tryHookFooterClass(lpparam, "com.android.systemui.qs.footer.ui.viewmodel.FooterActionsViewModel", footerMethods);
+        tryHookFooterClass(lpparam, "com.android.systemui.qs.footer.ui.viewmodel.FooterActionsViewModelImpl", footerMethods);
+        tryHookFooterClass(lpparam, "com.android.systemui.qs.footer.domain.interactor.FooterActionsInteractor", footerMethods);
+        tryHookFooterClass(lpparam, "com.android.systemui.qs.footer.domain.interactor.FooterActionsInteractorImpl", footerMethods);
+        tryHookFooterClass(lpparam, "com.android.systemui.qs.footer.ui.binder.FooterActionsViewBinder", footerMethods);
+        tryHookFooterClass(lpparam, "com.android.systemui.qs.footer.ui.binder.FooterActionsViewBinder$Companion", footerMethods);
+    }
+
+    private void tryHookFooterClass(XC_LoadPackage.LoadPackageParam lpparam, String className, String[] methodNames) {
         try {
-            Class<?> clazz = XposedHelpers.findClass("com.android.systemui.globalactions.GlobalActionsDialogLite", lpparam.classLoader);
+            Class<?> clazz = XposedHelpers.findClass(className, lpparam.classLoader);
+            logClassMethods(lpparam, className);
+            boolean hookedAny = false;
             for (Method m : clazz.getDeclaredMethods()) {
-                if (!"showOrHideDialog".equals(m.getName())) continue;
-                de.robv.android.xposed.XposedBridge.hookMethod(m, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        try {
-                            Context ctx = getContextFromAny(param.thisObject);
-                            if (ctx != null) {
-                                FeatureFlags.ensureInitialized(ctx);
-                                if (isKeyguardLocked(ctx)) {
-                                    if (!FeatureFlags.blockFooterPowerMenu()) return;
-                                    rejectFeedback(ctx);
-                                    param.setResult(null);
-                                    Logger.blocked("GlobalActionsDialogLite#showOrHideDialog", "keyguard_locked");
+                for (String target : methodNames) {
+                    if (!target.equals(m.getName())) continue;
+                    de.robv.android.xposed.XposedBridge.hookMethod(m, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                            try {
+                                Context ctx = getContextFromAny(param.thisObject);
+                                if (ctx != null) {
+                                    FeatureFlags.ensureInitialized(ctx);
+                                    if (isKeyguardLocked(ctx)) {
+                                        if (!FeatureFlags.blockFooterPowerMenu()) return;
+                                        rejectFeedback(ctx);
+                                        param.setResult(null);
+                                        Logger.blocked(className + "#" + m.getName(), "keyguard_locked");
+                                    }
                                 }
+                            } catch (Throwable t) {
+                                Logger.error(className + "#" + m.getName(), t.getMessage());
                             }
-                        } catch (Throwable t) {
-                            Logger.error("GlobalActionsDialogLite#showOrHideDialog", t.getMessage());
                         }
-                    }
-                });
-                Logger.hookSuccess("GlobalActionsDialogLite#showOrHideDialog hooked");
-                return;
+                    });
+                    hookedAny = true;
+                    Logger.hookSuccess(className + "#" + m.getName() + " hooked");
+                }
             }
-            Logger.hookFail("GlobalActionsDialogLite#showOrHideDialog", "method_not_found");
+            if (!hookedAny) {
+                Logger.hookFail(className, "no_target_methods");
+            }
         } catch (Throwable t) {
-            Logger.hookFail("GlobalActionsDialogLite", t.getMessage());
+            Logger.hookFail(className, t.getMessage());
         }
     }
 
@@ -280,7 +322,14 @@ public class QSBlocker implements IXposedHookLoadPackage {
 
     private void rejectFeedback(Context ctx) {
         try {
-            Toast.makeText(ctx, "Unlock to use", Toast.LENGTH_SHORT).show();
+            if (ctx != null) {
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    try {
+                        Toast.makeText(ctx, "Unlock to use", Toast.LENGTH_SHORT).show();
+                    } catch (Throwable ignored) {
+                    }
+                });
+            }
             Vibrator vib = (Vibrator) ctx.getSystemService(Context.VIBRATOR_SERVICE);
             if (vib != null) {
                 long[] pattern = new long[]{0, 40, 50, 40};
@@ -298,7 +347,8 @@ public class QSBlocker implements IXposedHookLoadPackage {
     private boolean isKeyguardLocked(Context ctx) {
         try {
             KeyguardManager km = (KeyguardManager) ctx.getSystemService(Context.KEYGUARD_SERVICE);
-            return km != null && km.isKeyguardLocked();
+            if (km == null) return false;
+            return km.isKeyguardLocked() || km.isDeviceLocked() || km.inKeyguardRestrictedInputMode();
         } catch (Throwable t) {
             return false;
         }
@@ -316,6 +366,14 @@ public class QSBlocker implements IXposedHookLoadPackage {
             try {
                 Object c2 = XposedHelpers.callMethod(obj, "getContext");
                 if (c2 instanceof Context) return (Context) c2;
+            } catch (Throwable ignored) {
+            }
+            try {
+                Class<?> activityThread = Class.forName("android.app.ActivityThread");
+                java.lang.reflect.Method currentApplication = activityThread.getDeclaredMethod("currentApplication");
+                currentApplication.setAccessible(true);
+                Object app = currentApplication.invoke(null);
+                if (app instanceof Context) return (Context) app;
             } catch (Throwable ignored) {
             }
         } catch (Throwable ignored) {
